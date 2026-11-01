@@ -1,6 +1,8 @@
 /* LifeLink front end. All records live in Google Sheets via the Apps Script API.
    sessionStorage holds only the login token for the current tab. */
 /* API_URL is defined in js/config.js (the only line you edit). */
+const BUILD = 'lifelink-app-2026-11-01-sheets-only';
+console.info('LifeLink app.js build:', BUILD, '| API:', typeof API_URL !== 'undefined' ? API_URL : 'not set');
 const GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Bombay', 'Rh Null'];
 const COMPS = ['Whole Blood', 'RBC', 'Plasma', 'Platelets', 'Cryoprecipitate'];
 const SEV = ['Mild', 'Moderate', 'Severe', 'Life-threatening'];
@@ -114,6 +116,7 @@ function showAuth(role = 'donor', mode = 'login') {
   a.replaceChildren(h('div', { class: 'acard glass' },
     h('div', { class: 'brand' }, h('span', { class: 'drop' }), h('span', {}, 'Life', h('b', {}, 'Link'))),
     h('p', { class: 'tagline' }, 'Smart transfusion & monitoring system'),
+    h('small', { class: 'tagline' }, 'Build: ' + BUILD),
     h('div', { class: 'tabs' }, ['donor', 'hospital', 'admin'].map(r => h('button', { class: 'tab', 'aria-pressed': r === role, onclick: () => showAuth(r, 'login') }, r[0].toUpperCase() + r.slice(1)))),
     role !== 'admin' ? h('div', { class: 'tabs' }, ['login', 'register'].map(m => h('button', { class: 'tab', 'aria-pressed': m === mode, onclick: () => showAuth(role, m) }, m === 'login' ? 'Sign in' : 'Register'))) : '',
     f));
@@ -123,7 +126,7 @@ function logout() { S = null; sessionStorage.removeItem('ll_session'); showAuth(
 
 /* ---------------- shell ---------------- */
 const NAV = {
-  donor: [['Overview', vDonorHome], ['Donate', vDonate], ['History', vHistory], ['HLA typing', vDonorHla], ['Rewards', vRewards], ['Compatibility', vCompat]],
+  donor: [['Overview', vDonorHome], ['My Details', vMyDetails], ['Donate', vDonate], ['History', vHistory], ['HLA typing', vDonorHla], ['Rewards', vRewards], ['Compatibility', vCompat]],
   hospital: [['Dashboard', vDash], ['Patients', vPatients], ['HLA match', vMatch], ['Inventory', vInv], ['Donations', vHospDon], ['Reactions', vReact], ['Emergency', vEmerg], ['Compatibility', vCompat]],
   admin: [['Dashboard', vDash], ['Donors', vAdmDonors], ['Hospitals', () => listView('Hospitals', 'getHospitals', ['HospitalID', 'HospitalName', 'LicenseNumber', 'Email', 'Phone', 'City', 'HospitalType', 'BloodBankAvailable', 'RegistrationDate'])],
     ['Patients', () => listView('Patients', 'getPatients', ['PatientID', 'FirstName', 'LastName', 'DOB', 'Gender', 'BloodGroup', 'HospitalID', 'RegistrationDate'])],
@@ -195,6 +198,13 @@ async function vDonorHome() {
       h('p', { class: 'note' }, 'Whole blood every 56 days, plasma every 28 days, platelets every 7 days.')),
     panel('Achievement badges', bd.length ? h('div', { class: 'badges' }, bd.map(x => pill(x, 'good'))) : h('p', { class: 'empty' }, 'Complete a donation to earn your first badge.')),
     panel('My profile', table([['DonorID', 'ID'], ['FullName', 'Name'], ['BloodGroup', 'Group'], ['Age', 'Age'], ['Height', 'Height'], ['Weight', 'Weight'], ['Phone', 'Phone'], ['Gmail', 'Gmail'], ['Status', 'Status', r => pill(r.EmergencyLock === 'Yes' ? 'Locked' : r.Status, r.EmergencyLock === 'Yes' ? 'bad' : 'good')]], [me])));
+}
+async function vMyDetails() {
+  const rows = await api('getDonors'); // read live from Google Sheets, never cached
+  const me = rows.find(x => x.DonorID === S.id);
+  if (!me) { page('My Details', h('p', { class: 'empty' }, 'Your record was not found in the database.')); return; }
+  page('My Details', panel('', table([['DonorID', 'Donor ID'], ['FullName', 'Name'], ['IDName', 'Name on Emirates ID'], ['EmiratesID', 'Emirates ID'], ['DateOfBirth', 'Date of birth'], ['Age', 'Age'], ['Height', 'Height (cm)'], ['Weight', 'Weight (kg)'],
+    ['Phone', 'Phone'], ['Gmail', 'Gmail'], ['BloodGroup', 'Blood group'], ['RegistrationDate', 'Registered'], ['Status', 'Status']], [me])));
 }
 const SCREEN = [
   ['Do you feel well today?', 'Yes'], ['Did you sleep at least 6 hours?', 'Yes'], ['Have you eaten and had water in the last 4 hours?', 'Yes'],
